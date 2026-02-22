@@ -126,6 +126,10 @@ export default function DistributionMaps() {
   const [showMigration, setShowMigration] = useState(true)
   const [showPredictions, setShowPredictions] = useState(false)
 
+  // Mobile panel visibility states
+  const [showFiltersPanel, setShowFiltersPanel] = useState(false)
+  const [showInsightsPanel, setShowInsightsPanel] = useState(false)
+
   useEffect(() => {
     let cancelled = false
     getBulanSeaSimulatedDataset().then((data) => {
@@ -385,8 +389,34 @@ export default function DistributionMaps() {
               </div>
             </div>
 
-            <div className="absolute left-3 top-[132px] z-30 w-[280px] rounded-sm border border-slate-300 bg-white/95 shadow-sm">
-              <div className="border-b border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-800">Layers & Filters</div>
+            {/* Mobile toggle buttons */}
+            <div className="absolute left-3 top-[100px] z-30 flex gap-2 sm:hidden">
+              <button
+                onClick={() => setShowFiltersPanel(!showFiltersPanel)}
+                className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-md border border-slate-200"
+              >
+                {showFiltersPanel ? 'Hide' : 'Show'} Filters
+              </button>
+              <button
+                onClick={() => setShowInsightsPanel(!showInsightsPanel)}
+                className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-md border border-slate-200"
+              >
+                {showInsightsPanel ? 'Hide' : 'Show'} Insights
+              </button>
+            </div>
+
+            <div className={`absolute left-3 top-[132px] z-30 w-[280px] max-w-[calc(100vw-24px)] rounded-sm border border-slate-300 bg-white/95 shadow-sm sm:w-[280px] lg:left-3 lg:top-[132px] ${showFiltersPanel ? 'fixed inset-x-4 top-20 w-auto max-w-none sm:absolute sm:inset-auto sm:left-3 sm:top-[132px] sm:w-[280px] sm:max-w-[calc(100vw-24px)] lg:left-3 lg:top-[132px]' : 'hidden sm:block'}`}>
+              <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+                <span className="text-[11px] font-semibold text-slate-800">Layers & Filters</span>
+                <button
+                  onClick={() => setShowFiltersPanel(false)}
+                  className="sm:hidden rounded p-1 text-slate-500 hover:bg-slate-100"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
               <div className="space-y-3 px-3 py-3">
                 <div className="grid grid-cols-2 gap-2 text-[12px]">
                   <label className="flex items-center gap-2">
@@ -462,7 +492,7 @@ export default function DistributionMaps() {
               </div>
             </div>
 
-            <div className="absolute bottom-3 left-3 z-30 w-[280px] rounded-sm border border-slate-300 bg-white/95 shadow-sm">
+            <div className="absolute bottom-3 left-3 z-30 w-[280px] max-w-[calc(100vw-24px)] rounded-sm border border-slate-300 bg-white/95 shadow-sm sm:w-[280px] sm:bottom-3 sm:left-3">
               <div className="border-b border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-800">Legend</div>
               <div className="space-y-2 px-3 py-3 text-[12px] text-slate-700">
                 <div className="text-[11px] font-semibold text-slate-700">Catch points (CPUE)</div>
@@ -499,7 +529,7 @@ export default function DistributionMaps() {
               </div>
             </div>
 
-            <div className="absolute right-3 top-3 z-30 w-[320px] rounded-sm border border-slate-300 bg-white/95 shadow-sm">
+            <div className={`absolute right-3 top-3 z-30 w-[320px] max-w-[calc(100vw-24px)] rounded-sm border border-slate-300 bg-white/95 shadow-sm sm:w-[320px] sm:right-3 sm:top-3 ${showInsightsPanel ? 'fixed inset-x-4 top-20 w-auto max-w-none sm:absolute sm:inset-auto sm:right-3 sm:top-3 sm:w-[320px] sm:max-w-[calc(100vw-24px)]' : 'hidden sm:block'}`}>
               <div className="border-b border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-800">Insights</div>
               <div className="space-y-3 px-3 py-3 text-[12px] text-slate-700">
                 <div className="rounded-sm border border-slate-200 bg-white p-3">

@@ -232,54 +232,81 @@ export default function Overview() {
   ]
 
   return (
-    <section className="border border-slate-300 bg-white shadow-sm">
-      <div className="border-b border-slate-300 p-4">
-        <h1 className="text-xl font-semibold text-slate-900">Overview</h1>
-        <p className="mt-1 text-[12px] text-slate-700">
-          Summary dashboard of all pages (mock data wired).
+    <section className="space-y-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Overview</h1>
+        <p className="mt-2 text-sm text-slate-600 md:text-base">
+          Summary dashboard of skipjack tuna distribution and migration patterns in Bulan Sea.
         </p>
       </div>
 
-      <div className="grid gap-3 border-b border-slate-300 p-4 sm:grid-cols-3">
-        <div className="rounded-sm border border-slate-300 bg-slate-50 p-3">
-          <div className="text-[11px] font-semibold text-slate-700">Catch records</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{totals.catchCount}</div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-sm transition-shadow hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-blue-100 p-3">
+              <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-slate-600">Catch Records</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{totals.catchCount}</div>
+            </div>
+          </div>
         </div>
-        <div className="rounded-sm border border-slate-300 bg-slate-50 p-3">
-          <div className="text-[11px] font-semibold text-slate-700">Prediction records</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{totals.predCount}</div>
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-green-50 to-white p-6 shadow-sm transition-shadow hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-green-100 p-3">
+              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-slate-600">Predictions</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{totals.predCount}</div>
+            </div>
+          </div>
         </div>
-        <div className="rounded-sm border border-slate-300 bg-slate-50 p-3">
-          <div className="text-[11px] font-semibold text-slate-700">Environmental records</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{totals.envCount}</div>
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-purple-50 to-white p-6 shadow-sm transition-shadow hover:shadow-md sm:col-span-2 lg:col-span-1">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-purple-100 p-3">
+              <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-slate-600">Environmental Data</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{totals.envCount}</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-2" style={{ minHeight: '600px' }}>
+      <div className="grid gap-6 lg:grid-cols-2">
         {cards.map((c) => {
           const isMapCard = c.kind === 'map' || c.to === '/distribution-maps'
           return (
             <div
               key={c.to}
-              className={`rounded-sm border border-slate-300 bg-slate-50 ${
-                isMapCard ? 'p-2' : 'p-4'
-              } flex flex-col h-full ${c.wide ? 'lg:col-span-2' : ''}`}
+              className={`rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md ${
+                isMapCard ? 'p-4' : 'p-6'
+              } flex flex-col ${c.wide ? 'lg:col-span-2' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-[13px] font-semibold text-slate-900">{c.title}</h2>
-                  {!isMapCard && <p className="mt-1 text-[12px] text-slate-700">{c.description}</p>}
+                <div className="flex-1">
+                  <h2 className="text-lg font-semibold text-slate-900">{c.title}</h2>
+                  {!isMapCard && <p className="mt-1 text-sm text-slate-600">{c.description}</p>}
                 </div>
                 <Link
                   to={c.to}
-                  className="shrink-0 rounded-sm border border-slate-300 bg-sky-800 px-3 py-2 text-[12px] font-semibold text-white hover:bg-sky-900"
+                  className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                 >
-                  Open
+                  View
                 </Link>
               </div>
 
               {isMapCard && (
-                <div className="flex-1 mt-2 min-h-0">
+                <div className="mt-4 flex-1 min-h-[300px] md:min-h-[400px] rounded-lg overflow-hidden border border-slate-200">
                   {c.to === '/migration-patterns' ? (
                     <MapContainer
                       center={[12.66475 + latOffset, 123.8728889 + lngOffset]}
@@ -314,20 +341,20 @@ export default function Overview() {
               )}
 
               {!isMapCard && (
-                <div className="mt-3">
+                <div className="mt-4">
                   {c.kind === 'chart' ? (
-                    <div className="space-y-3">
-                      <div className="rounded-sm border border-slate-300 bg-white p-2">
-                        <div className="text-[11px] font-semibold text-slate-700 mb-2">Monthly Catch (kg)</div>
-                        <Chart type="bar" data={catchChartData.data} options={catchChartData.options} height={100} />
+                    <div className="space-y-4">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-sm font-semibold text-slate-700 mb-3">Monthly Catch (kg)</div>
+                        <Chart type="bar" data={catchChartData.data} options={catchChartData.options} height={120} />
                       </div>
-                      <div className="rounded-sm border border-slate-300 bg-white p-2">
-                        <div className="text-[11px] font-semibold text-slate-700 mb-2">Mean CPUE (kg/trip)</div>
-                        <Chart type="line" data={cpueChartData.data} options={cpueChartData.options} height={100} />
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-sm font-semibold text-slate-700 mb-3">Mean CPUE (kg/trip)</div>
+                        <Chart type="line" data={cpueChartData.data} options={cpueChartData.options} height={120} />
                       </div>
                     </div>
                   ) : (
-                    <div className="h-24 rounded-sm border border-slate-300 bg-white p-3 text-[12px] text-slate-700">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                       {c.to === '/distribution-maps' && (
                         <div>Distribution points available: {totals.predCount}</div>
                       )}

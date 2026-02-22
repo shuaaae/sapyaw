@@ -160,44 +160,80 @@ export default function ChartsData() {
   )
 
   return (
-    <section className="border border-slate-300 bg-white shadow-sm">
-      <div className="border-b border-slate-300 p-4">
-        <h1 className="text-xl font-semibold text-slate-900">Charts & Data</h1>
-        <p className="mt-1 text-[12px] text-slate-700">Catch data charts and CPUE (mock data wired).</p>
+    <section className="space-y-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Charts & Data</h1>
+        <p className="mt-2 text-sm text-slate-600 md:text-base">Monthly catch data, CPUE trends, and statistical analysis.</p>
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-2">
-        <div className="rounded-sm border border-slate-300 bg-slate-50 p-4 lg:col-span-2">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-sm border border-slate-300 bg-white p-3">
-              <div className="text-[11px] font-semibold text-slate-700">Records</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{catchLocations.length}</div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-blue-100 p-3">
+              <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </div>
-            <div className="rounded-sm border border-slate-300 bg-white p-3">
-              <div className="text-[11px] font-semibold text-slate-700">Total Catch (kg)</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{Math.round(totalCatchKg)}</div>
-            </div>
-            <div className="rounded-sm border border-slate-300 bg-white p-3">
-              <div className="text-[11px] font-semibold text-slate-700">Overall CPUE (kg/hour)</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{overallCpue.toFixed(2)}</div>
-            </div>
-            <div className="rounded-sm border border-slate-300 bg-white p-3">
-              <div className="text-[11px] font-semibold text-slate-700">Trips (sum)</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{totalTrips}</div>
+            <div>
+              <div className="text-sm font-medium text-slate-600">Records</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{catchLocations.length}</div>
             </div>
           </div>
         </div>
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-green-50 to-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-green-100 p-3">
+              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-slate-600">Total Catch</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{Math.round(totalCatchKg)} kg</div>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-purple-50 to-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-purple-100 p-3">
+              <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-slate-600">Avg CPUE</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{overallCpue.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-amber-100 p-3">
+              <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-slate-600">Total Trips</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{totalTrips}</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <div className="rounded-sm border border-slate-300 bg-slate-50 p-4">
-          <h2 className="text-[12px] font-semibold text-slate-900">Catch Data</h2>
-          <div className="mt-3">
-            <Chart type="bar" data={catchChartData} options={commonOptions} height={260} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Monthly Catch Data</h2>
+          <p className="mt-1 text-sm text-slate-600">Total catch volume by month (kg)</p>
+          <div className="mt-6">
+            <Chart type="bar" data={catchChartData} options={commonOptions} height={300} />
           </div>
         </div>
-        <div className="rounded-sm border border-slate-300 bg-slate-50 p-4">
-          <h2 className="text-[12px] font-semibold text-slate-900">CPUE Trend</h2>
-          <div className="mt-3">
-            <Chart type="line" data={cpueChartData} options={commonOptions} height={260} />
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">CPUE Trend Analysis</h2>
+          <p className="mt-1 text-sm text-slate-600">Catch per unit effort over time (kg/hour)</p>
+          <div className="mt-6">
+            <Chart type="line" data={cpueChartData} options={commonOptions} height={300} />
           </div>
         </div>
       </div>

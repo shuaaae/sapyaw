@@ -40,6 +40,14 @@ function deriveCatchPointsFromSimulatedDataset() {
   })
 }
 
+function isoDateForMonth2026(monthName, day = 15) {
+  const idx = monthToIndex[monthName]
+  if (idx == null) return '2026-01-01'
+  const mm = String(idx + 1).padStart(2, '0')
+  const dd = String(day).padStart(2, '0')
+  return `2026-${mm}-${dd}`
+}
+
 function derivePredictionsFromSimulatedDataset() {
   const rows = bulanSeaSimulatedDataset?.predictions || []
   const months = Object.keys(monthToIndex)
@@ -47,7 +55,7 @@ function derivePredictionsFromSimulatedDataset() {
     const monthName = months[i % months.length] || 'January'
     return {
       id: `bs-${p.id}`,
-      date: isoDateForMonth2025(monthName, 5 + (i % 20)),
+      date: isoDateForMonth2026(monthName, 5 + (i % 20)),
       lat: p.predicted_lat,
       lng: p.predicted_lng,
       suitability: p.probability_level === 'high' ? 0.86 : p.probability_level === 'moderate' ? 0.78 : 0.7,

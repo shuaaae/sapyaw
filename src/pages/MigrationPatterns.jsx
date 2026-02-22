@@ -150,22 +150,27 @@ export default function MigrationPatterns() {
   }, [catchPoints])
 
   return (
-    <section className="border border-slate-300 bg-white shadow-sm">
-      <div className="border-b border-slate-300 p-4">
-        <h1 className="text-xl font-semibold text-slate-900">Migration Patterns</h1>
-        <p className="mt-1 text-[12px] text-slate-700">
-          Migration pathway view (mock data wired).
+    <section className="space-y-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Migration Patterns</h1>
+        <p className="mt-2 text-sm text-slate-600 md:text-base">
+          Skipjack tuna migration pathways and movement patterns in Bulan Sea.
         </p>
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-[1fr_360px]">
-        <div className="rounded-sm border border-slate-300 bg-slate-50 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-[12px] font-semibold text-slate-900">Migration Path Map</h2>
-            <div className="text-[11px] text-slate-600">Path points: {path.length}</div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Migration Path Map</h2>
+            <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
+              <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              </svg>
+              <span className="text-sm font-medium text-blue-900">{path.length} points</span>
+            </div>
           </div>
 
-          <div className="h-[520px] w-full overflow-hidden rounded-sm border border-slate-300 bg-white">
+          <div className="h-[400px] w-full overflow-hidden rounded-lg border border-slate-200 bg-white md:h-[520px]">
             <MapContainer
               center={bulanSeaCenter}
               zoom={defaultZoom}
@@ -200,52 +205,53 @@ export default function MigrationPatterns() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-sm border border-slate-300 bg-slate-50 p-4">
-            <h2 className="text-[12px] font-semibold text-slate-900">Summary</h2>
-            <div className="mt-3 space-y-2 text-[12px] text-slate-700">
-              <div className="flex items-center justify-between">
-                <span>Prediction points</span>
-                <span className="font-semibold text-slate-900">{predictions.length}</span>
+        <div className="space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Summary Statistics</h2>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3">
+                <span className="text-sm font-medium text-slate-700">Prediction points</span>
+                <span className="text-lg font-bold text-blue-700">{predictions.length}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span>Estimated path distance</span>
-                <span className="font-semibold text-slate-900">{pathDistanceKm.toFixed(1)} km</span>
+              <div className="flex items-center justify-between rounded-lg bg-green-50 p-3">
+                <span className="text-sm font-medium text-slate-700">Path distance</span>
+                <span className="text-lg font-bold text-green-700">{pathDistanceKm.toFixed(1)} km</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span>Catch records</span>
-                <span className="font-semibold text-slate-900">{catchPoints.length}</span>
+              <div className="flex items-center justify-between rounded-lg bg-purple-50 p-3">
+                <span className="text-sm font-medium text-slate-700">Catch records</span>
+                <span className="text-lg font-bold text-purple-700">{catchPoints.length}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span>Overall CPUE</span>
-                <span className="font-semibold text-slate-900">{overallCpue.toFixed(2)} kg/hr</span>
+              <div className="flex items-center justify-between rounded-lg bg-amber-50 p-3">
+                <span className="text-sm font-medium text-slate-700">Overall CPUE</span>
+                <span className="text-lg font-bold text-amber-700">{overallCpue.toFixed(2)} kg/hr</span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-sm border border-slate-300 bg-slate-50 p-4">
-            <h2 className="text-[12px] font-semibold text-slate-900">Path points (ordered)</h2>
-            <div className="mt-3 overflow-hidden rounded-sm border border-slate-300 bg-white">
-              <table className="w-full text-left text-[12px]">
-                <thead className="bg-slate-100 text-slate-700">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Path Points</h2>
+            <p className="mt-1 text-sm text-slate-600">Ordered by date</p>
+            <div className="mt-4 max-h-[400px] overflow-y-auto rounded-lg border border-slate-200">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-slate-100 text-slate-700">
                   <tr>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2">Zone</th>
-                    <th className="px-3 py-2">Suit.</th>
+                    <th className="px-4 py-3 font-semibold">Date</th>
+                    <th className="px-4 py-3 font-semibold">Zone</th>
+                    <th className="px-4 py-3 font-semibold">Suitability</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-200">
                   {orderedPredictions.map((p) => (
-                    <tr key={p.id} className="border-t border-slate-200">
-                      <td className="px-3 py-2">{p.date || '—'}</td>
-                      <td className="px-3 py-2">{zoneNameForLatLng(p.lat, p.lng)}</td>
-                      <td className="px-3 py-2">{Number(p.suitability).toFixed(2)}</td>
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-slate-900">{p.date || '—'}</td>
+                      <td className="px-4 py-3 text-slate-700">{zoneNameForLatLng(p.lat, p.lng)}</td>
+                      <td className="px-4 py-3 font-medium text-slate-900">{Number(p.suitability).toFixed(2)}</td>
                     </tr>
                   ))}
                   {!orderedPredictions.length && (
                     <tr>
-                      <td className="px-3 py-3 text-slate-600" colSpan={3}>
-                        No prediction points.
+                      <td className="px-4 py-6 text-center text-slate-500" colSpan={3}>
+                        No prediction points available.
                       </td>
                     </tr>
                   )}

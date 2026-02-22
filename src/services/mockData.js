@@ -92,8 +92,8 @@ export const mockCatchPoints = [
   {
     id: 'c11',
     date: '2025-11-20',
-    lat: 12.61,
-    lng: 123.80,
+    lat: 12.66,
+    lng: 123.85,
     catchKg: 120,
     effortHours: 6,
     gear: 'gillnet',
@@ -193,8 +193,8 @@ export const mockEnvParams = [
   {
     id: 'e11',
     date: '2025-11-20',
-    lat: 12.61,
-    lng: 123.80,
+    lat: 12.66,
+    lng: 123.85,
     sstC: 28.3,
     chlorophyll: 0.26,
   },
@@ -211,7 +211,7 @@ export const mockEnvParams = [
 export const mockPredictions = [
   {
     id: 'p1',
-    date: '2025-01-15',
+    date: '2026-01-15',
     lat: 12.67,
     lng: 124.07,
     suitability: 0.78,
@@ -219,7 +219,7 @@ export const mockPredictions = [
   },
   {
     id: 'p2',
-    date: '2025-02-12',
+    date: '2026-02-12',
     lat: 12.64,
     lng: 123.82,
     suitability: 0.80,
@@ -227,7 +227,7 @@ export const mockPredictions = [
   },
   {
     id: 'p3',
-    date: '2025-03-10',
+    date: '2026-03-10',
     lat: 12.62,
     lng: 123.84,
     suitability: 0.82,
@@ -235,7 +235,7 @@ export const mockPredictions = [
   },
   {
     id: 'p4',
-    date: '2025-04-08',
+    date: '2026-04-08',
     lat: 12.66,
     lng: 123.86,
     suitability: 0.79,
@@ -243,7 +243,7 @@ export const mockPredictions = [
   },
   {
     id: 'p5',
-    date: '2025-05-14',
+    date: '2026-05-14',
     lat: 12.65,
     lng: 123.89,
     suitability: 0.86,
@@ -251,7 +251,7 @@ export const mockPredictions = [
   },
   {
     id: 'p6',
-    date: '2025-06-18',
+    date: '2026-06-18',
     lat: 12.68,
     lng: 123.85,
     suitability: 0.88,
@@ -259,7 +259,7 @@ export const mockPredictions = [
   },
   {
     id: 'p7',
-    date: '2025-07-22',
+    date: '2026-07-22',
     lat: 12.70,
     lng: 123.84,
     suitability: 0.85,
@@ -267,7 +267,7 @@ export const mockPredictions = [
   },
   {
     id: 'p8',
-    date: '2025-08-11',
+    date: '2026-08-11',
     lat: 12.71,
     lng: 123.83,
     suitability: 0.83,
@@ -275,7 +275,7 @@ export const mockPredictions = [
   },
   {
     id: 'p9',
-    date: '2025-09-09',
+    date: '2026-09-09',
     lat: 12.69,
     lng: 123.82,
     suitability: 0.79,
@@ -283,7 +283,7 @@ export const mockPredictions = [
   },
   {
     id: 'p10',
-    date: '2025-10-16',
+    date: '2026-10-16',
     lat: 12.64,
     lng: 123.81,
     suitability: 0.76,
@@ -291,15 +291,15 @@ export const mockPredictions = [
   },
   {
     id: 'p11',
-    date: '2025-11-20',
-    lat: 12.61,
-    lng: 123.80,
+    date: '2026-11-20',
+    lat: 12.66,
+    lng: 123.85,
     suitability: 0.74,
     cycle: 'low',
   },
   {
     id: 'p12',
-    date: '2025-12-12',
+    date: '2026-12-12',
     lat: 12.63,
     lng: 123.79,
     suitability: 0.75,
@@ -518,7 +518,7 @@ export const bulanSeaSimulatedDataset = {
     },
     {
       id: 'cl21',
-      latitude: 12.612,
+      latitude: 12.662,
       longitude: 123.94,
       month: 'November',
       catch_volume_kg: 120,
@@ -528,7 +528,7 @@ export const bulanSeaSimulatedDataset = {
     },
     {
       id: 'cl22',
-      latitude: 12.601,
+      latitude: 12.651,
       longitude: 123.91,
       month: 'November',
       catch_volume_kg: 110,
@@ -568,7 +568,7 @@ export const bulanSeaSimulatedDataset = {
     },
     {
       id: 'cl26',
-      latitude: 12.604,
+      latitude: 12.654,
       longitude: 123.80,
       month: 'February',
       catch_volume_kg: 175,
@@ -578,7 +578,7 @@ export const bulanSeaSimulatedDataset = {
     },
     {
       id: 'cl27',
-      latitude: 12.617,
+      latitude: 12.667,
       longitude: 123.82,
       month: 'February',
       catch_volume_kg: 205,
@@ -720,7 +720,7 @@ export const bulanSeaSimulatedDataset = {
     },
     {
       id: 'hs06',
-      center_lat: 12.615,
+      center_lat: 12.665,
       center_lng: 123.92,
       radius_km: 7.8,
       peak_month: 'November',
@@ -792,14 +792,14 @@ export const bulanSeaSimulatedDataset = {
       id: 'mp05',
       start_lat: 12.724,
       start_lng: 123.93,
-      end_lat: 12.615,
+      end_lat: 12.665,
       end_lng: 123.95,
       months_active: ['September', 'October', 'November'],
       migration_type: 'long',
     },
     {
       id: 'mp06',
-      start_lat: 12.605,
+      start_lat: 12.655,
       start_lng: 123.80,
       end_lat: 12.675,
       end_lng: 123.84,
@@ -909,7 +909,7 @@ export const bulanSeaSimulatedDataset = {
     },
     {
       id: 'pr11',
-      predicted_lat: 12.616,
+      predicted_lat: 12.666,
       predicted_lng: 123.92,
       probability_level: 'high',
       basis: 'historical catch trend',
@@ -923,7 +923,7 @@ export const bulanSeaSimulatedDataset = {
     },
     {
       id: 'pr13',
-      predicted_lat: 12.606,
+      predicted_lat: 12.656,
       predicted_lng: 123.80,
       probability_level: 'moderate',
       basis: 'historical catch trend',
