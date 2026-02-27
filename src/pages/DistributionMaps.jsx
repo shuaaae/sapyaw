@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Circle, CircleMarker, MapContainer, Polyline, TileLayer } from 'react-leaflet'
-import { getBulanSeaSimulatedDataset } from '../services/dataService.js'
+import { getBulanSeaSimulatedDataset, getCatchPointsByYear, getEnvironmentalParamsByYear, getPredictionsByYear } from '../services/dataService.js'
 
 function abundanceColor(level) {
   if (level === 'high') return '#16a34a'
@@ -17,6 +17,15 @@ function seasonForMonth(month) {
   if (['december', 'january', 'february'].includes(m)) return 'Northeast Monsoon'
   if (['june', 'july', 'august'].includes(m)) return 'Southwest Monsoon'
   return 'Inter-monsoon'
+}
+
+function getMonthFromDate(date) {
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ]
+  const dateObj = new Date(date)
+  return monthNames[dateObj.getMonth()]
 }
 
 function pointInPolygon(point, polygon) {
@@ -117,6 +126,7 @@ export default function DistributionMaps() {
 
   const [dataset, setDataset] = useState(null)
 
+  const [selectedYear, setSelectedYear] = useState('2026')
   const [selectedMonth, setSelectedMonth] = useState('All')
   const [selectedSeason, setSelectedSeason] = useState('All')
   const [selectedAbundance, setSelectedAbundance] = useState('All')
@@ -130,53 +140,77 @@ export default function DistributionMaps() {
   const [showFiltersPanel, setShowFiltersPanel] = useState(false)
   const [showInsightsPanel, setShowInsightsPanel] = useState(false)
 
+  // Data states for different years
+  const [catchData2025, setCatchData2025] = useState([])
+  const [catchData2026, setCatchData2026] = useState([])
+  const [envData2025, setEnvData2025] = useState([])
+  const [envData2026, setEnvData2026] = useState([])
+  const [predictions2026, setPredictions2026] = useState([])
+
   useEffect(() => {
     let cancelled = false
+    
+    // Load simulated dataset for hotspots and migration
     getBulanSeaSimulatedDataset().then((data) => {
       if (cancelled) return
       setDataset(data || null)
     })
+
+    // Load data for different years
+    const loadYearlyData = async () => {
+      try {
+        const [catch2025, catch2026, env2025, env2026, preds2026] = await Promise.all([
+          getCatchPointsByYear('2025'),
+          getCatchPointsByYear('2026'),
+          getEnvironmentalParamsByYear('2025'),
+          getEnvironmentalParamsByYear('2026'),
+          getPredictionsByYear('2026')
+        ])
+        
+        if (!cancelled) {
+          setCatchData2025(catch2025 || [])
+          setCatchData2026(catch2026 || [])
+          setEnvData2025(env2025 || [])
+          setEnvData2026(env2026 || [])
+          setPredictions2026(preds2026 || [])
+        }
+      } catch (error) {
+        console.error('Error loading yearly data:', error)
+      }
+    }
+
+    loadYearlyData()
+    
     return () => {
       cancelled = true
     }
   }, [])
 
-  const catchLocations = useMemo(() => dataset?.catch_locations ?? [], [dataset])
+  const catchLocations = useMemo(() => {
+    return selectedYear === '2025' ? catchData2025 : catchData2026
+  }, [selectedYear, catchData2025, catchData2026])
+  
   const hotspots = useMemo(() => dataset?.hotspots ?? [], [dataset])
   const migrationPaths = useMemo(() => dataset?.migration_paths ?? [], [dataset])
-  const predictions = useMemo(() => dataset?.predictions ?? [], [dataset])
+  const predictions = useMemo(() => selectedYear === '2026' ? predictions2026 : [], [selectedYear, predictions2026])
 
-  const monthOptions = useMemo(() => {
-    const set = new Set(catchLocations.map((r) => r.month).filter(Boolean))
-    const months = Array.from(set)
-    const order = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ]
-    months.sort((a, b) => order.indexOf(a) - order.indexOf(b))
-    return ['All', ...months]
-  }, [catchLocations])
+  const allMonths = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December',
+  ]
+  const monthOptions = ['All', ...allMonths]
 
   const seasons = ['All', 'Northeast Monsoon', 'Southwest Monsoon', 'Inter-monsoon']
   const abundances = ['All', 'low', 'medium', 'high']
 
   const filteredCatch = useMemo(() => {
     return catchLocations.filter((r) => {
-      if (selectedMonth !== 'All' && r.month !== selectedMonth) return false
-      const season = seasonForMonth(r.month)
+      const month = getMonthFromDate(r.date)
+      if (selectedMonth !== 'All' && month !== selectedMonth) return false
+      const season = seasonForMonth(month)
       if (selectedSeason !== 'All' && season !== selectedSeason) return false
       if (selectedAbundance !== 'All' && r.abundance_level !== selectedAbundance) return false
-      if (!isMarine(r.latitude + latOffset, r.longitude + lngOffset)) return false
+      if (!isMarine(r.lat + latOffset, r.lng + lngOffset)) return false
       return true
     })
   }, [catchLocations, selectedMonth, selectedSeason, selectedAbundance, isMarine, latOffset, lngOffset])
@@ -209,14 +243,19 @@ export default function DistributionMaps() {
   }, [migrationPaths, selectedMonth, selectedSeason, isMarine, latOffset, lngOffset])
 
   const filteredPredictions = useMemo(() => {
-    return predictions.filter((p) => isMarine(p.predicted_lat + latOffset, p.predicted_lng + lngOffset))
-  }, [predictions, isMarine, latOffset, lngOffset])
+    return predictions.filter((p) => {
+      const month = getMonthFromDate(p.date)
+      if (selectedMonth !== 'All' && month !== selectedMonth) return false
+      if (!isMarine(p.lat + latOffset, p.lng + lngOffset)) return false
+      return true
+    })
+  }, [predictions, selectedMonth, isMarine, latOffset, lngOffset])
 
   const stats = useMemo(() => {
-    const totalCatch = filteredCatch.reduce((s, r) => s + (Number(r.catch_volume_kg) || 0), 0)
-    const totalTrips = filteredCatch.reduce((s, r) => s + (Number(r.fishing_effort_trips) || 0), 0)
+    const totalCatch = filteredCatch.reduce((s, r) => s + (Number(r.catchKg) || 0), 0)
+    const totalTrips = filteredCatch.reduce((s, r) => s + (Number(r.effortHours || 6) / 6), 0)
     const meanCpue = filteredCatch.length
-      ? filteredCatch.reduce((s, r) => s + (Number(r.CPUE) || 0), 0) / filteredCatch.length
+      ? filteredCatch.reduce((s, r) => s + (Number(r.catchKg || 0) / (Number(r.effortHours || 6))), 0) / filteredCatch.length
       : 0
     const dominantZone = filteredHotspots[0]
       ? 'Hotspot-focused'
@@ -235,7 +274,7 @@ export default function DistributionMaps() {
 
   const cpueP95 = useMemo(() => {
     const values = filteredCatch
-      .map((r) => Number(r.CPUE) || 0)
+      .map((r) => Number(r.catchKg || 0) / Number(r.effortHours || 6))
       .filter((v) => v > 0)
       .sort((a, b) => a - b)
     if (!values.length) return 1
@@ -250,6 +289,21 @@ export default function DistributionMaps() {
         <p className="mt-1 text-[12px] text-slate-700">
           Fisheries intelligence view for intra-annual distribution (simulated research data).
         </p>
+      </div>
+
+      {/* Legend — mobile only, below header */}
+      <div className="sm:hidden border-b border-slate-200 px-4 py-3">
+        <div className="text-[11px] font-semibold text-slate-800 mb-2">Legend</div>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[12px] text-slate-700">
+          <div className="flex items-center gap-1 font-semibold text-slate-600 text-[11px] w-full">Catch points (CPUE)</div>
+          <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full shrink-0" style={{ background: '#ef4444' }} /><span>Low</span></div>
+          <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full shrink-0" style={{ background: '#f59e0b' }} /><span>Medium</span></div>
+          <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full shrink-0" style={{ background: '#16a34a' }} /><span>High</span></div>
+          <div className="flex items-center gap-1 font-semibold text-slate-600 text-[11px] w-full mt-1">Hotspots / Migration / Predictions</div>
+          <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm shrink-0" style={{ background: '#06b6d4', opacity: 0.55 }} /><span>Hotspot zone</span></div>
+          <div className="flex items-center gap-1"><span className="inline-block h-[2px] w-5 shrink-0" style={{ background: '#2563eb' }} /><span>Migration</span></div>
+          <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border shrink-0" style={{ borderColor: '#7c3aed', background: '#a78bfa', opacity: 0.55 }} /><span>Prediction</span></div>
+        </div>
       </div>
 
       <div className="p-4">
@@ -335,13 +389,13 @@ export default function DistributionMaps() {
 
               {showCatch &&
                 filteredCatch.map((r) => {
-                  const cpue = Number(r.CPUE) || 0
+                  const cpue = Number(r.catchKg || 0) / Number(r.effortHours || 6)
                   const radius = clamp(4, 12, 4 + (cpue / (cpueP95 || 1)) * 8)
-                  const c = abundanceColor(r.abundance_level)
+                  const c = abundanceColor('medium') // Default to medium for now
                   return (
                     <CircleMarker
                       key={r.id}
-                      center={[r.latitude + latOffset, r.longitude + lngOffset]}
+                      center={[r.lat + latOffset, r.lng + lngOffset]}
                       radius={radius}
                       pathOptions={{
                         color: c,
@@ -357,7 +411,7 @@ export default function DistributionMaps() {
                 filteredPredictions.map((p) => (
                   <CircleMarker
                     key={p.id}
-                    center={[p.predicted_lat + latOffset, p.predicted_lng + lngOffset]}
+                    center={[p.lat + latOffset, p.lng + lngOffset]}
                     radius={7}
                     pathOptions={{
                       color: '#7c3aed',
@@ -390,23 +444,31 @@ export default function DistributionMaps() {
             </div>
 
             {/* Mobile toggle buttons */}
-            <div className="absolute left-3 top-[100px] z-30 flex gap-2 sm:hidden">
+            <div className="absolute left-3 top-[100px] z-50 flex gap-2 sm:hidden">
               <button
-                onClick={() => setShowFiltersPanel(!showFiltersPanel)}
+                onClick={() => { setShowFiltersPanel(!showFiltersPanel); setShowInsightsPanel(false) }}
                 className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-md border border-slate-200"
               >
-                {showFiltersPanel ? 'Hide' : 'Show'} Filters
+                ☰ Filters
               </button>
               <button
-                onClick={() => setShowInsightsPanel(!showInsightsPanel)}
+                onClick={() => { setShowInsightsPanel(!showInsightsPanel); setShowFiltersPanel(false) }}
                 className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-md border border-slate-200"
               >
-                {showInsightsPanel ? 'Hide' : 'Show'} Insights
+                ℹ Insights
               </button>
             </div>
 
-            <div className={`absolute left-3 top-[132px] z-30 w-[280px] max-w-[calc(100vw-24px)] rounded-sm border border-slate-300 bg-white/95 shadow-sm sm:w-[280px] lg:left-3 lg:top-[132px] ${showFiltersPanel ? 'fixed inset-x-4 top-20 w-auto max-w-none sm:absolute sm:inset-auto sm:left-3 sm:top-[132px] sm:w-[280px] sm:max-w-[calc(100vw-24px)] lg:left-3 lg:top-[132px]' : 'hidden sm:block'}`}>
-              <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+            {/* Mobile backdrop */}
+            {(showFiltersPanel || showInsightsPanel) && (
+              <div
+                className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+                onClick={() => { setShowFiltersPanel(false); setShowInsightsPanel(false) }}
+              />
+            )}
+
+            <div className={`z-50 w-[220px] rounded-sm border border-slate-300 bg-white shadow-sm flex flex-col sm:absolute sm:left-3 sm:top-[132px] sm:w-[220px] ${showFiltersPanel ? 'fixed left-4 right-4 top-16 w-auto' : 'hidden sm:flex'}`} style={{maxHeight: showFiltersPanel ? 'calc(100vh - 80px)' : 'calc(100% - 148px)'}}>
+              <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 shrink-0">
                 <span className="text-[11px] font-semibold text-slate-800">Layers & Filters</span>
                 <button
                   onClick={() => setShowFiltersPanel(false)}
@@ -417,7 +479,7 @@ export default function DistributionMaps() {
                   </svg>
                 </button>
               </div>
-              <div className="space-y-3 px-3 py-3">
+              <div className="space-y-3 px-3 py-3 overflow-y-auto">
                 <div className="grid grid-cols-2 gap-2 text-[12px]">
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={showCatch} onChange={(e) => setShowCatch(e.target.checked)} />
@@ -439,6 +501,18 @@ export default function DistributionMaps() {
                     />
                     <span>Predictions</span>
                   </label>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700">Year</label>
+                  <select
+                    className="mt-1 w-full rounded-sm border border-slate-300 bg-white px-2 py-2 text-[12px]"
+                    value={selectedYear}
+                    onChange={(e) => { setSelectedYear(e.target.value); setSelectedMonth('All') }}
+                  >
+                    <option value="2025">2025 (Previous)</option>
+                    <option value="2026">2026 (Current)</option>
+                  </select>
                 </div>
 
                 <div>
@@ -492,7 +566,7 @@ export default function DistributionMaps() {
               </div>
             </div>
 
-            <div className="absolute bottom-3 left-3 z-30 w-[280px] max-w-[calc(100vw-24px)] rounded-sm border border-slate-300 bg-white/95 shadow-sm sm:w-[280px] sm:bottom-3 sm:left-3">
+            <div className="hidden sm:block absolute bottom-3 right-3 z-20 w-[200px] rounded-sm border border-slate-300 bg-white/95 shadow-sm">
               <div className="border-b border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-800">Legend</div>
               <div className="space-y-2 px-3 py-3 text-[12px] text-slate-700">
                 <div className="text-[11px] font-semibold text-slate-700">Catch points (CPUE)</div>
@@ -529,7 +603,7 @@ export default function DistributionMaps() {
               </div>
             </div>
 
-            <div className={`absolute right-3 top-3 z-30 w-[320px] max-w-[calc(100vw-24px)] rounded-sm border border-slate-300 bg-white/95 shadow-sm sm:w-[320px] sm:right-3 sm:top-3 ${showInsightsPanel ? 'fixed inset-x-4 top-20 w-auto max-w-none sm:absolute sm:inset-auto sm:right-3 sm:top-3 sm:w-[320px] sm:max-w-[calc(100vw-24px)]' : 'hidden sm:block'}`}>
+            <div className={`z-50 w-[220px] rounded-sm border border-slate-300 bg-white shadow-sm sm:absolute sm:right-3 sm:top-3 sm:w-[220px] ${showInsightsPanel ? 'fixed left-4 right-4 top-16' : 'hidden sm:block'}`}>
               <div className="border-b border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-800">Insights</div>
               <div className="space-y-3 px-3 py-3 text-[12px] text-slate-700">
                 <div className="rounded-sm border border-slate-200 bg-white p-3">

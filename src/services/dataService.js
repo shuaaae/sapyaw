@@ -65,7 +65,11 @@ function derivePredictionsFromSimulatedDataset() {
 }
 
 export async function getCatchPoints() {
-  return deriveCatchPointsFromSimulatedDataset() || mockCatchPoints
+  const simulated = deriveCatchPointsFromSimulatedDataset() || []
+  // Merge simulated (2025) with mockCatchPoints (2025 + 2026)
+  const ids = new Set(simulated.map(p => p.id))
+  const extra = mockCatchPoints.filter(p => !ids.has(p.id))
+  return [...simulated, ...extra]
 }
 
 export async function getEnvironmentalParams() {
@@ -78,4 +82,20 @@ export async function getPredictions() {
 
 export async function getBulanSeaSimulatedDataset() {
   return bulanSeaSimulatedDataset
+}
+
+// Function to get data filtered by year
+export async function getCatchPointsByYear(year = '2025') {
+  const catchPoints = await getCatchPoints()
+  return catchPoints.filter(point => point.date.startsWith(year))
+}
+
+export async function getEnvironmentalParamsByYear(year = '2025') {
+  const envParams = await getEnvironmentalParams()
+  return envParams.filter(param => param.date.startsWith(year))
+}
+
+export async function getPredictionsByYear(year = '2026') {
+  const predictions = await getPredictions()
+  return predictions.filter(prediction => prediction.date.startsWith(year))
 }
