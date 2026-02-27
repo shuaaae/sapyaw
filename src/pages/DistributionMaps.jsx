@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Circle, CircleMarker, MapContainer, Polyline, TileLayer } from 'react-leaflet'
 import { getBulanSeaSimulatedDataset, getCatchPointsByYear, getEnvironmentalParamsByYear, getPredictionsByYear } from '../services/dataService.js'
 
@@ -126,9 +127,20 @@ export default function DistributionMaps() {
 
   const [dataset, setDataset] = useState(null)
 
-  const [selectedYear, setSelectedYear] = useState('2026')
-  const [selectedMonth, setSelectedMonth] = useState('All')
-  const [selectedSeason, setSelectedSeason] = useState('All')
+  const [searchParams] = useSearchParams()
+
+  // Map life stage query param to pre-set filters
+  const stageDefaults = useMemo(() => {
+    const stage = searchParams.get('stage')
+    if (stage === 'juvenile') return { year: '2025', season: 'Northeast Monsoon', month: 'All' }
+    if (stage === 'breeding') return { year: '2026', season: 'Southwest Monsoon', month: 'All' }
+    if (stage === 'adult')    return { year: '2026', season: 'All', month: 'July' }
+    return { year: '2026', season: 'All', month: 'All' }
+  }, [searchParams])
+
+  const [selectedYear, setSelectedYear] = useState(() => stageDefaults.year)
+  const [selectedMonth, setSelectedMonth] = useState(() => stageDefaults.month)
+  const [selectedSeason, setSelectedSeason] = useState(() => stageDefaults.season)
   const [selectedAbundance, setSelectedAbundance] = useState('All')
 
   const [showCatch, setShowCatch] = useState(true)
@@ -290,6 +302,29 @@ export default function DistributionMaps() {
           Fisheries intelligence view for intra-annual distribution (simulated research data).
         </p>
       </div>
+
+      {/* Stage banner — shown when navigated from Migration Patterns */}
+      {searchParams.get('stage') && (() => {
+        const stage = searchParams.get('stage')
+        const map = {
+          juvenile: { label: 'Juvenile Stage', desc: 'Nearshore · Nov–Feb · Northeast Monsoon', color: 'emerald', emoji: '🐟' },
+          breeding: { label: 'Breeding Season', desc: 'Offshore · Apr–Aug · Southwest Monsoon', color: 'amber', emoji: '🥚' },
+          adult:    { label: 'Adult Stage',    desc: 'Full range · Jun–Sep · High CPUE months', color: 'blue',    emoji: '🐠' },
+        }
+        const s = map[stage]
+        if (!s) return null
+        const bg = { emerald: 'bg-emerald-50 border-emerald-200 text-emerald-900', amber: 'bg-amber-50 border-amber-200 text-amber-900', blue: 'bg-blue-50 border-blue-200 text-blue-900' }[s.color]
+        const sub = { emerald: 'text-emerald-700', amber: 'text-amber-700', blue: 'text-blue-700' }[s.color]
+        return (
+          <div className={`flex items-center gap-3 border-b px-4 py-3 ${bg}`}>
+            <span className="text-2xl">{s.emoji}</span>
+            <div>
+              <p className="text-sm font-bold">{s.label} — Viewing on Distribution Map</p>
+              <p className={`text-xs ${sub}`}>{s.desc} · Filters pre-applied</p>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Legend — mobile only, below header */}
       <div className="sm:hidden border-b border-slate-200 px-4 py-3">
