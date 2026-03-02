@@ -8,6 +8,7 @@ import DistributionMaps from './pages/DistributionMaps.jsx'
 import MigrationPatterns from './pages/MigrationPatterns.jsx'
 import ChartsData from './pages/ChartsData.jsx'
 import Downloads from './pages/Downloads.jsx'
+import FormulaSolutions from './pages/FormulaSolutions.jsx'
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/migration-patterns" element={<MigrationPatterns />} />
                 <Route path="/charts-data" element={<ChartsData />} />
                 <Route path="/downloads" element={<Downloads />} />
+                <Route path="/formula-solutions" element={<FormulaSolutions />} />
                 <Route path="*" element={<Navigate to="/overview" replace />} />
               </Routes>
             </div>

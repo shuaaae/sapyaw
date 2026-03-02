@@ -1,6 +1,8 @@
 import Chart from '../components/Chart.jsx'
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { getBulanSeaSimulatedDataset } from '../services/dataService.js'
+import { coefficientOfVariation, computeCpue, linearTrend, mean, pearsonCorrelation, percentageContribution, standardDeviation } from '../utils/statistics.js'
 
 function pointInPolygon(point, polygon) {
   const [px, py] = point
@@ -37,6 +39,7 @@ function monthLabel(monthName) {
 }
 
 export default function ChartsData() {
+  const [searchParams] = useSearchParams()
   const [dataset, setDataset] = useState(null)
 
   const latOffset = -0.02
@@ -81,7 +84,7 @@ export default function ChartsData() {
   const monthly = useMemo(() => {
     const map = new Map()
     for (const m of monthOrder) {
-      map.set(m, { catchKg: 0, trips: 0, cpueSum: 0, n: 0 })
+      map.set(m, { catchKg: 0, trips: 0 })
     }
     for (const r of catchLocations) {
       const m = r.month
@@ -89,12 +92,9 @@ export default function ChartsData() {
       const prev = map.get(m)
       const catchKg = Number(r.catch_volume_kg) || 0
       const trips = Number(r.fishing_effort_trips) || 0
-      const cpue = Number(r.CPUE) || 0
       map.set(m, {
         catchKg: prev.catchKg + catchKg,
         trips: prev.trips + trips,
-        cpueSum: prev.cpueSum + cpue,
-        n: prev.n + 1,
       })
     }
 
@@ -104,7 +104,7 @@ export default function ChartsData() {
         key: `2025-${String(monthOrder.indexOf(m) + 1).padStart(2, '0')}`,
         label: monthLabel(m),
         catchKg: v.catchKg,
-        cpue: v.n ? v.cpueSum / v.n : 0,
+        cpue: computeCpue(v.catchKg, v.trips),
         trips: v.trips,
       }
     })
@@ -112,11 +112,49 @@ export default function ChartsData() {
 
   const totalCatchKg = useMemo(() => monthly.reduce((s, r) => s + (Number(r.catchKg) || 0), 0), [monthly])
   const totalTrips = useMemo(() => monthly.reduce((s, r) => s + (Number(r.trips) || 0), 0), [monthly])
-  const overallCpue = useMemo(() => {
-    const points = catchLocations.map((r) => Number(r.CPUE) || 0).filter((v) => v > 0)
-    if (!points.length) return 0
-    return points.reduce((s, v) => s + v, 0) / points.length
+  const overallCpue = useMemo(() => computeCpue(totalCatchKg, totalTrips), [totalCatchKg, totalTrips])
+  const monthlyCatchValues = useMemo(() => monthly.map((m) => Number(m.catchKg) || 0), [monthly])
+  const monthlyCpueValues = useMemo(() => monthly.map((m) => Number(m.cpue) || 0), [monthly])
+  const catchMean = useMemo(() => mean(monthlyCatchValues), [monthlyCatchValues])
+  const catchSd = useMemo(() => standardDeviation(monthlyCatchValues), [monthlyCatchValues])
+  const catchCv = useMemo(() => coefficientOfVariation(monthlyCatchValues), [monthlyCatchValues])
+  const cpueMean = useMemo(() => mean(monthlyCpueValues), [monthlyCpueValues])
+  const cpueTrend = useMemo(() => linearTrend(monthlyCpueValues), [monthlyCpueValues])
+  const maxMonthlyCatchPct = useMemo(() => {
+    const maxMonthlyCatch = Math.max(...monthlyCatchValues, 0)
+    return percentageContribution(maxMonthlyCatch, totalCatchKg)
+  }, [monthlyCatchValues, totalCatchKg])
+  const catchEffortCorrelation = useMemo(() => pearsonCorrelation(monthlyCatchValues, monthly.map((m) => Number(m.trips) || 0)), [monthlyCatchValues, monthly])
+
+  const anova = useMemo(() => {
+    const seasonGroups = { NE: [], SW: [], IM: [] }
+    for (const r of monthly) {
+      const m = r.label.split(' ')[0]
+      if (['Dec', 'Jan', 'Feb'].includes(m)) seasonGroups.NE.push(r.cpue)
+      else if (['Jun', 'Jul', 'Aug'].includes(m)) seasonGroups.SW.push(r.cpue)
+      else seasonGroups.IM.push(r.cpue)
+    }
+    const all = [...seasonGroups.NE, ...seasonGroups.SW, ...seasonGroups.IM]
+    const grand = mean(all)
+    const k = 3
+    const n = all.length
+    const ssb = Object.values(seasonGroups).reduce((s, g) => s + g.length * (mean(g) - grand) ** 2, 0)
+    const ssw = Object.values(seasonGroups).reduce((s, g) => s + g.reduce((t, v) => t + (v - mean(g)) ** 2, 0), 0)
+    const msb = ssb / (k - 1)
+    const msw = ssw / (n - k)
+    const f = msw > 0 ? msb / msw : 0
+    return { msb, msw, f }
+  }, [monthly])
+
+  const chiSquare = useMemo(() => {
+    const counts = { low: 0, medium: 0, high: 0 }
+    for (const r of catchLocations) counts[r.abundance_level] = (counts[r.abundance_level] || 0) + 1
+    const expected = catchLocations.length / 3 || 1
+    const value = ['low', 'medium', 'high'].reduce((s, key) => s + ((counts[key] - expected) ** 2) / expected, 0)
+    return { counts, expected, value }
   }, [catchLocations])
+
+  const showStatsFormulaContext = searchParams.get('formula') === 'stats'
 
   const catchChartData = useMemo(
     () => ({
@@ -137,7 +175,7 @@ export default function ChartsData() {
       labels: monthly.map((m) => m.label),
       datasets: [
         {
-          label: 'CPUE (kg/hour)',
+          label: 'CPUE (kg/trip)',
           data: monthly.map((m) => Number(m.cpue.toFixed(2))),
           borderColor: '#0f766e',
           backgroundColor: 'rgba(15,118,110,0.2)',
@@ -161,6 +199,17 @@ export default function ChartsData() {
 
   return (
     <section className="space-y-6">
+      {showStatsFormulaContext && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+          <div className="text-sm font-semibold text-blue-900">Statistical Formula Context</div>
+          <div className="mt-1 text-sm text-blue-800">
+            Mean={catchMean.toFixed(2)}, SD={catchSd.toFixed(2)}, CV={catchCv.toFixed(2)}%, Pearson r={catchEffortCorrelation.toFixed(4)}
+          </div>
+          <div className="mt-1 text-sm text-blue-900">
+            Trend: Y = {cpueTrend.intercept.toFixed(4)} + ({cpueTrend.slope.toFixed(4)})X, ANOVA F={anova.f.toFixed(4)}, Chi-square={chiSquare.value.toFixed(2)}
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Charts & Data</h1>
         <p className="mt-2 text-sm text-slate-600 md:text-base">Monthly catch data, CPUE trends, and statistical analysis.</p>
@@ -231,9 +280,52 @@ export default function ChartsData() {
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">CPUE Trend Analysis</h2>
-          <p className="mt-1 text-sm text-slate-600">Catch per unit effort over time (kg/hour)</p>
+          <p className="mt-1 text-sm text-slate-600">Catch per unit effort over time (kg/trip)</p>
           <div className="mt-6">
             <Chart type="line" data={cpueChartData} options={commonOptions} height={300} />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Statistical Treatment Snapshot</h2>
+        <p className="mt-1 text-sm text-slate-600">Descriptive and trend metrics computed from monthly catch and CPUE.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">Mean Monthly Catch</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{catchMean.toFixed(2)} kg</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">Catch Standard Deviation</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{catchSd.toFixed(2)}</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">Catch Coefficient of Variation</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{catchCv.toFixed(2)}%</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">Mean Monthly CPUE</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{cpueMean.toFixed(2)} kg/trip</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">CPUE Trend Slope</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{cpueTrend.slope.toFixed(4)}</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">Highest-Month Catch Contribution</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{maxMonthlyCatchPct.toFixed(2)}%</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">Pearson r (Catch vs Trips)</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{catchEffortCorrelation.toFixed(4)}</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">ANOVA F</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{anova.f.toFixed(4)}</div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-600">Chi-square</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{chiSquare.value.toFixed(2)}</div>
           </div>
         </div>
       </div>

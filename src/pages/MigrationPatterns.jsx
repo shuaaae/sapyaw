@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Circle, CircleMarker, MapContainer, Polyline, TileLayer } from 'react-leaflet'
-import { getCatchPoints, getCatchPointsByYear, getPredictions, getBulanSeaSimulatedDataset } from '../services/dataService.js'
+import { getCatchPoints, getPredictions, getBulanSeaSimulatedDataset } from '../services/dataService.js'
+import { computeCpue, computeMigrationPatternIndex } from '../utils/statistics.js'
 
 function pointInPolygon(point, polygon) {
   const [px, py] = point
@@ -100,14 +101,8 @@ function getMonthName(dateStr) {
   return names[d.getMonth()]
 }
 
-function abundanceColor(level) {
-  if (level === 'high') return '#16a34a'
-  if (level === 'medium') return '#f59e0b'
-  return '#ef4444'
-}
-
 export default function MigrationPatterns() {
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const bulanSeaCenter = [12.66475, 123.8728889]
   const bulanSeaBounds = [
     [12.40, 123.55],
@@ -188,10 +183,24 @@ export default function MigrationPatterns() {
     return sum
   }, [path])
 
+  const migrationTimeMonths = useMemo(() => {
+    if (orderedPredictions.length < 2) return 0
+    const start = orderedPredictions[0]?._d
+    const end = orderedPredictions[orderedPredictions.length - 1]?._d
+    if (!start || !end) return 0
+    const elapsedMs = end.getTime() - start.getTime()
+    return Math.max(0, elapsedMs / (1000 * 60 * 60 * 24 * 30.4375))
+  }, [orderedPredictions])
+
+  const migrationPatternIndex = useMemo(
+    () => computeMigrationPatternIndex(pathDistanceKm, migrationTimeMonths),
+    [pathDistanceKm, migrationTimeMonths],
+  )
+
   const overallCpue = useMemo(() => {
     const catchKg = catchPoints.reduce((s, r) => s + (Number(r.catchKg) || 0), 0)
     const effortHours = catchPoints.reduce((s, r) => s + (Number(r.effortHours) || 0), 0)
-    return effortHours > 0 ? catchKg / effortHours : 0
+    return computeCpue(catchKg, effortHours)
   }, [catchPoints])
 
   // Stage map filtered data
@@ -224,12 +233,33 @@ export default function MigrationPatterns() {
   const stageStats = useMemo(() => {
     const totalCatch = stageCatch.reduce((s, r) => s + (Number(r.catchKg) || 0), 0)
     const totalEffort = stageCatch.reduce((s, r) => s + (Number(r.effortHours) || 6), 0)
-    const cpue = totalEffort > 0 ? (totalCatch / totalEffort).toFixed(2) : '0.00'
+    const cpue = computeCpue(totalCatch, totalEffort).toFixed(2)
     return { totalCatch: Math.round(totalCatch), cpue, records: stageCatch.length, hotspots: stageHotspots.length }
   }, [stageCatch, stageHotspots])
 
+  const migrationFormulaContext = useMemo(() => {
+    if (searchParams.get('formula') !== 'migration') return null
+    return {
+      D: pathDistanceKm,
+      T: migrationTimeMonths,
+      MPI: migrationPatternIndex,
+      points: orderedPredictions.length,
+    }
+  }, [searchParams, pathDistanceKm, migrationTimeMonths, migrationPatternIndex, orderedPredictions.length])
+
   return (
     <section className="space-y-6">
+      {migrationFormulaContext && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+          <div className="text-sm font-semibold text-blue-900">Migration Formula Context</div>
+          <div className="mt-1 text-sm text-blue-800">
+            D = {migrationFormulaContext.D.toFixed(4)} km, T = {migrationFormulaContext.T.toFixed(4)} months, points = {migrationFormulaContext.points}
+          </div>
+          <div className="mt-1 text-sm text-blue-900">
+            MPI = D/T = {migrationFormulaContext.D.toFixed(4)}/{migrationFormulaContext.T.toFixed(4)} = {migrationFormulaContext.MPI.toFixed(4)} km/month
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Migration Patterns</h1>
         <p className="mt-2 text-sm text-slate-600 md:text-base">
@@ -295,6 +325,14 @@ export default function MigrationPatterns() {
               <div className="flex items-center justify-between rounded-lg bg-green-50 p-3">
                 <span className="text-sm font-medium text-slate-700">Path distance</span>
                 <span className="text-lg font-bold text-green-700">{pathDistanceKm.toFixed(1)} km</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-cyan-50 p-3">
+                <span className="text-sm font-medium text-slate-700">Time interval</span>
+                <span className="text-lg font-bold text-cyan-700">{migrationTimeMonths.toFixed(2)} mo</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-indigo-50 p-3">
+                <span className="text-sm font-medium text-slate-700">Migration Pattern Index</span>
+                <span className="text-lg font-bold text-indigo-700">{migrationPatternIndex.toFixed(2)} km/mo</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-purple-50 p-3">
                 <span className="text-sm font-medium text-slate-700">Catch records</span>

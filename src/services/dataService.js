@@ -1,4 +1,5 @@
 import { mockCatchPoints, mockEnvParams, mockPredictions, bulanSeaSimulatedDataset } from './mockData.js'
+import { computeShelfLifePredictionAccuracy } from '../utils/statistics.js'
 
 const monthToIndex = {
   January: 0,
@@ -53,6 +54,7 @@ function derivePredictionsFromSimulatedDataset() {
   const months = Object.keys(monthToIndex)
   return rows.map((p, i) => {
     const monthName = months[i % months.length] || 'January'
+    const shelfLifeAccuracy = computeShelfLifePredictionAccuracy(p.predicted_shelf_life, p.actual_shelf_life)
     return {
       id: `bs-${p.id}`,
       date: isoDateForMonth2026(monthName, 5 + (i % 20)),
@@ -60,6 +62,7 @@ function derivePredictionsFromSimulatedDataset() {
       lng: p.predicted_lng,
       suitability: p.probability_level === 'high' ? 0.86 : p.probability_level === 'moderate' ? 0.78 : 0.7,
       cycle: p.probability_level === 'high' ? 'high' : p.probability_level === 'moderate' ? 'medium' : 'low',
+      shelfLifeAccuracy,
     }
   })
 }

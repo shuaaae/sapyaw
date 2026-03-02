@@ -4,6 +4,7 @@ import Chart from '../components/Chart.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { getCatchPoints, getPredictions, getEnvironmentalParams, getBulanSeaSimulatedDataset } from '../services/dataService.js'
 import { MapContainer, TileLayer, Polyline, CircleMarker } from 'react-leaflet'
+import { computeCpue } from '../utils/statistics.js'
 import 'leaflet/dist/leaflet.css'
 
 function pointInPolygon(point, polygon) {
@@ -136,7 +137,7 @@ export default function Overview() {
   const monthly = useMemo(() => {
     const map = new Map()
     for (const m of monthOrder) {
-      map.set(m, { catchKg: 0, trips: 0, cpueSum: 0, n: 0 })
+      map.set(m, { catchKg: 0, trips: 0 })
     }
     for (const r of catchLocations) {
       const m = r.month
@@ -145,15 +146,13 @@ export default function Overview() {
       map.set(m, {
         catchKg: prev.catchKg + (Number(r.catch_volume_kg) || 0),
         trips: prev.trips + (Number(r.fishing_effort_trips) || 0),
-        cpueSum: prev.cpueSum + (Number(r.CPUE) || 0),
-        n: prev.n + 1,
       })
     }
     return Array.from(map.entries()).map(([month, data]) => ({
       month,
       catchKg: data.catchKg,
       trips: data.trips,
-      avgCpue: data.n > 0 ? data.cpueSum / data.n : 0,
+      avgCpue: computeCpue(data.catchKg, data.trips),
     }))
   }, [catchLocations, monthOrder])
 

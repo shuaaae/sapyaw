@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Circle, CircleMarker, MapContainer, Polyline, TileLayer } from 'react-leaflet'
-import { getBulanSeaSimulatedDataset, getCatchPointsByYear, getEnvironmentalParamsByYear, getPredictionsByYear } from '../services/dataService.js'
+import { Circle, CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet'
+import { getBulanSeaSimulatedDataset, getCatchPointsByYear, getPredictionsByYear } from '../services/dataService.js'
+import { computeCpue, computeShelfLifePredictionAccuracy, computeSpatialDistributionIndex, mean } from '../utils/statistics.js'
 
 function abundanceColor(level) {
   if (level === 'high') return '#16a34a'
@@ -138,15 +139,33 @@ export default function DistributionMaps() {
     return { year: '2026', season: 'All', month: 'All' }
   }, [searchParams])
 
-  const [selectedYear, setSelectedYear] = useState(() => stageDefaults.year)
-  const [selectedMonth, setSelectedMonth] = useState(() => stageDefaults.month)
-  const [selectedSeason, setSelectedSeason] = useState(() => stageDefaults.season)
-  const [selectedAbundance, setSelectedAbundance] = useState('All')
+  const queryDefaults = useMemo(() => {
+    const year = searchParams.get('year')
+    const month = searchParams.get('month')
+    const season = searchParams.get('season')
+    const abundance = searchParams.get('abundance')
+    const labels = searchParams.get('labels')
+    const formula = searchParams.get('formula')
+    return {
+      year: year || stageDefaults.year,
+      month: month || stageDefaults.month,
+      season: season || stageDefaults.season,
+      abundance: abundance || 'All',
+      labels: labels === '1',
+      showPredictions: formula === 'shelfLife',
+    }
+  }, [searchParams, stageDefaults])
+
+  const [selectedYear, setSelectedYear] = useState(() => queryDefaults.year)
+  const [selectedMonth, setSelectedMonth] = useState(() => queryDefaults.month)
+  const [selectedSeason, setSelectedSeason] = useState(() => queryDefaults.season)
+  const [selectedAbundance, setSelectedAbundance] = useState(() => queryDefaults.abundance)
 
   const [showCatch, setShowCatch] = useState(true)
   const [showHotspots, setShowHotspots] = useState(true)
   const [showMigration, setShowMigration] = useState(true)
-  const [showPredictions, setShowPredictions] = useState(false)
+  const [showPredictions, setShowPredictions] = useState(() => queryDefaults.showPredictions)
+  const [showCatchAbundanceLabels, setShowCatchAbundanceLabels] = useState(() => queryDefaults.labels)
 
   // Mobile panel visibility states
   const [showFiltersPanel, setShowFiltersPanel] = useState(false)
@@ -155,8 +174,6 @@ export default function DistributionMaps() {
   // Data states for different years
   const [catchData2025, setCatchData2025] = useState([])
   const [catchData2026, setCatchData2026] = useState([])
-  const [envData2025, setEnvData2025] = useState([])
-  const [envData2026, setEnvData2026] = useState([])
   const [predictions2026, setPredictions2026] = useState([])
 
   useEffect(() => {
@@ -171,19 +188,15 @@ export default function DistributionMaps() {
     // Load data for different years
     const loadYearlyData = async () => {
       try {
-        const [catch2025, catch2026, env2025, env2026, preds2026] = await Promise.all([
+        const [catch2025, catch2026, preds2026] = await Promise.all([
           getCatchPointsByYear('2025'),
           getCatchPointsByYear('2026'),
-          getEnvironmentalParamsByYear('2025'),
-          getEnvironmentalParamsByYear('2026'),
           getPredictionsByYear('2026')
         ])
         
         if (!cancelled) {
           setCatchData2025(catch2025 || [])
           setCatchData2026(catch2026 || [])
-          setEnvData2025(env2025 || [])
-          setEnvData2026(env2026 || [])
           setPredictions2026(preds2026 || [])
         }
       } catch (error) {
@@ -266,9 +279,7 @@ export default function DistributionMaps() {
   const stats = useMemo(() => {
     const totalCatch = filteredCatch.reduce((s, r) => s + (Number(r.catchKg) || 0), 0)
     const totalTrips = filteredCatch.reduce((s, r) => s + (Number(r.effortHours || 6) / 6), 0)
-    const meanCpue = filteredCatch.length
-      ? filteredCatch.reduce((s, r) => s + (Number(r.catchKg || 0) / (Number(r.effortHours || 6))), 0) / filteredCatch.length
-      : 0
+    const meanCpue = mean(filteredCatch.map((r) => computeCpue(r.catchKg, r.effortHours || 6)))
     const dominantZone = filteredHotspots[0]
       ? 'Hotspot-focused'
       : filteredCatch.length
@@ -284,14 +295,64 @@ export default function DistributionMaps() {
     }
   }, [filteredCatch, filteredHotspots])
 
-  const cpueP95 = useMemo(() => {
+  const cpueFormulaContext = useMemo(() => {
+    if (searchParams.get('formula') !== 'cpue') return null
+    const totalCatch = filteredCatch.reduce((s, r) => s + (Number(r.catchKg) || 0), 0)
+    const totalEffortTrips = filteredCatch.reduce((s, r) => s + (Number(r.effortHours || 6) / 6), 0)
+    const cpue = computeCpue(totalCatch, totalEffortTrips)
+    return {
+      totalCatch,
+      totalEffortTrips,
+      cpue,
+      month: selectedMonth,
+      year: selectedYear,
+    }
+  }, [searchParams, filteredCatch, selectedMonth, selectedYear])
+
+  const tdiFormulaContext = useMemo(() => {
+    if (searchParams.get('formula') !== 'tdi') return null
+    if (!filteredCatch.length) return null
+    const cpueValues = filteredCatch.map((r) => computeCpue(r.catchKg, r.effortHours || 6)).filter((v) => v > 0)
+    const cpueMax = cpueValues.length ? Math.max(...cpueValues) : 0
+    const sample = filteredCatch[0]
+    const cpueLocation = computeCpue(sample.catchKg, sample.effortHours || 6)
+    const tdi = cpueMax > 0 ? cpueLocation / cpueMax : 0
+    return {
+      cpueLocation,
+      cpueMax,
+      tdi,
+      sampleId: sample.id,
+      month: selectedMonth,
+      year: selectedYear,
+    }
+  }, [searchParams, filteredCatch, selectedMonth, selectedYear])
+
+  const shelfLifeFormulaContext = useMemo(() => {
+    if (searchParams.get('formula') !== 'shelfLife') return null
+    const existing = filteredPredictions.find((p) => typeof p.shelfLifeAccuracy === 'number')
+    if (existing) {
+      return {
+        psl: existing.predictedShelfLife,
+        asl: existing.actualShelfLife,
+        accuracy: existing.shelfLifeAccuracy,
+        source: 'dataset',
+      }
+    }
+    const psl = 9
+    const asl = 10
+    return {
+      psl,
+      asl,
+      accuracy: computeShelfLifePredictionAccuracy(psl, asl),
+      source: 'illustrative',
+    }
+  }, [searchParams, filteredPredictions])
+
+  const maxCpueObserved = useMemo(() => {
     const values = filteredCatch
-      .map((r) => Number(r.catchKg || 0) / Number(r.effortHours || 6))
+      .map((r) => computeCpue(r.catchKg, r.effortHours || 6))
       .filter((v) => v > 0)
-      .sort((a, b) => a - b)
-    if (!values.length) return 1
-    const idx = Math.floor(values.length * 0.95) - 1
-    return values[clamp(0, values.length - 1, idx)] || values[values.length - 1] || 1
+    return values.length ? Math.max(...values) : 1
   }, [filteredCatch])
 
   return (
@@ -342,6 +403,39 @@ export default function DistributionMaps() {
       </div>
 
       <div className="p-4">
+        {cpueFormulaContext && (
+          <div className="mb-4 rounded-sm border border-blue-200 bg-blue-50 p-3">
+            <div className="text-[12px] font-semibold text-blue-900">CPUE Formula Context</div>
+            <div className="mt-1 text-[12px] text-blue-800">
+              Showing exact filtered values for {cpueFormulaContext.month} {cpueFormulaContext.year}: C = {Math.round(cpueFormulaContext.totalCatch)} kg, F = {cpueFormulaContext.totalEffortTrips.toFixed(0)} trips
+            </div>
+            <div className="mt-1 text-[12px] text-blue-900">
+              CPUE = C/F = {Math.round(cpueFormulaContext.totalCatch)}/{cpueFormulaContext.totalEffortTrips.toFixed(0)} = {cpueFormulaContext.cpue.toFixed(2)} kg/trip
+            </div>
+          </div>
+        )}
+        {tdiFormulaContext && (
+          <div className="mb-4 rounded-sm border border-emerald-200 bg-emerald-50 p-3">
+            <div className="text-[12px] font-semibold text-emerald-900">Intra-Annual Spatial Distribution Context</div>
+            <div className="mt-1 text-[12px] text-emerald-800">
+              Sample point = {tdiFormulaContext.sampleId} ({tdiFormulaContext.month} {tdiFormulaContext.year})
+            </div>
+            <div className="mt-1 text-[12px] text-emerald-900">
+              TDI = CPUE_location/CPUE_max = {tdiFormulaContext.cpueLocation.toFixed(2)}/{tdiFormulaContext.cpueMax.toFixed(2)} = {tdiFormulaContext.tdi.toFixed(4)}
+            </div>
+          </div>
+        )}
+        {shelfLifeFormulaContext && (
+          <div className="mb-4 rounded-sm border border-purple-200 bg-purple-50 p-3">
+            <div className="text-[12px] font-semibold text-purple-900">Shelf-Life Prediction Accuracy Context</div>
+            <div className="mt-1 text-[12px] text-purple-800">
+              Source: {shelfLifeFormulaContext.source === 'dataset' ? 'Dataset values' : 'Illustrative values (PSL/ASL not present in current records)'}
+            </div>
+            <div className="mt-1 text-[12px] text-purple-900">
+              S = (1 - |PSL - ASL| / ASL) x 100 = (1 - |{shelfLifeFormulaContext.psl} - {shelfLifeFormulaContext.asl}|/{shelfLifeFormulaContext.asl}) x 100 = {(shelfLifeFormulaContext.accuracy ?? 0).toFixed(2)}%
+            </div>
+          </div>
+        )}
         <div className="rounded-sm border border-slate-300 bg-slate-50 p-3">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-[12px] font-semibold text-slate-900">Bulan Sea Intelligence Map</h2>
@@ -424,9 +518,13 @@ export default function DistributionMaps() {
 
               {showCatch &&
                 filteredCatch.map((r) => {
-                  const cpue = Number(r.catchKg || 0) / Number(r.effortHours || 6)
-                  const radius = clamp(4, 12, 4 + (cpue / (cpueP95 || 1)) * 8)
-                  const c = abundanceColor('medium') // Default to medium for now
+                  const cpue = computeCpue(r.catchKg, r.effortHours || 6)
+                  const spatialIndex = computeSpatialDistributionIndex(cpue, maxCpueObserved || 1)
+                  const radius = clamp(4, 12, 4 + spatialIndex * 8)
+                  const derivedAbundance = spatialIndex >= 0.67 ? 'high' : spatialIndex >= 0.34 ? 'medium' : 'low'
+                  const abundanceLevel = r.abundance_level || derivedAbundance
+                  const c = abundanceColor(abundanceLevel)
+                  const abundanceLabel = `${abundanceLevel.charAt(0).toUpperCase()}${abundanceLevel.slice(1)} abundance`
                   return (
                     <CircleMarker
                       key={r.id}
@@ -438,7 +536,13 @@ export default function DistributionMaps() {
                         fillColor: c,
                         fillOpacity: 0.3,
                       }}
-                    />
+                    >
+                      {showCatchAbundanceLabels && (
+                        <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+                          {abundanceLabel}
+                        </Tooltip>
+                      )}
+                    </CircleMarker>
                   )
                 })}
 
@@ -519,6 +623,14 @@ export default function DistributionMaps() {
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={showCatch} onChange={(e) => setShowCatch(e.target.checked)} />
                     <span>Catch (CPUE)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={showCatchAbundanceLabels}
+                      onChange={(e) => setShowCatchAbundanceLabels(e.target.checked)}
+                    />
+                    <span>Catch labels</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={showHotspots} onChange={(e) => setShowHotspots(e.target.checked)} />
