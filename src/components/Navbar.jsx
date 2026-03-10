@@ -14,7 +14,7 @@ export default function Navbar({ onMenuToggle }) {
           </div>
           <div className="flex flex-col">
             <h1 className="text-base font-bold text-slate-900 md:text-lg">SAPYAW</h1>
-            <p className="hidden text-xs text-slate-600 sm:block md:text-sm">Bulan Sea Tuna Monitoring System</p>
+            <p className="hidden text-xs text-slate-600 sm:block md:text-sm">Skipjack Tuna Monitoring System</p>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Circle, CircleMarker, MapContainer, Polyline, TileLayer } from 'react-leaflet'
+import { Circle, CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import { getCatchPoints, getPredictions, getBulanSeaSimulatedDataset } from '../services/dataService.js'
 import { computeCpue, computeMigrationPatternIndex } from '../utils/statistics.js'
 
@@ -87,6 +87,83 @@ const STAGE_CONFIG = {
   },
 }
 
+function buildFlowPoints(path, pointsPerSegment = 16) {
+  if (!Array.isArray(path) || path.length < 2) return []
+  const flow = []
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const [sLat, sLng] = path[i]
+    const [eLat, eLng] = path[i + 1]
+    for (let step = 0; step < pointsPerSegment; step += 1) {
+      const t = step / pointsPerSegment
+      const lat = sLat + (eLat - sLat) * t
+      const lng = sLng + (eLng - sLng) * t
+      flow.push([lat, lng])
+    }
+  }
+  return flow
+}
+
+function AnimatedMigrationFlow({ path }) {
+  const [phase, setPhase] = useState(0)
+  const frameRef = useRef(null)
+
+  const flowPoints = useMemo(
+    () => buildFlowPoints(path, 16),
+    [path],
+  )
+
+  useEffect(() => {
+    if (!flowPoints.length) return undefined
+
+    const durationMs = 9000 // full loop duration
+    const start = performance.now()
+
+    const loop = () => {
+      const now = performance.now()
+      const elapsed = (now - start) % durationMs
+      setPhase(elapsed / durationMs)
+      frameRef.current = requestAnimationFrame(loop)
+    }
+
+    frameRef.current = requestAnimationFrame(loop)
+
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    }
+  }, [flowPoints.length])
+
+  if (!flowPoints.length) return null
+
+  const trailLength = 0.4 // fraction of full loop visible as a glowing trail
+
+  return (
+    <>
+      {flowPoints.map((pt, idx) => {
+        const pos = idx / flowPoints.length
+        const rel = (pos - phase + 1) % 1
+        if (rel > trailLength) return null
+
+        const intensity = 1 - rel / trailLength
+        const radius = 2 + 2.5 * intensity
+
+        return (
+          <CircleMarker
+            key={idx}
+            center={pt}
+            radius={radius}
+            pathOptions={{
+              color: '#38bdf8',
+              weight: 0,
+              fillColor: '#38bdf8',
+              fillOpacity: 0.6 * intensity + 0.2,
+            }}
+          />
+        )
+      })}
+    </>
+  )
+}
+
 function seasonForMonth(month) {
   const ne = ['November', 'December', 'January', 'February', 'March']
   const sw = ['May', 'June', 'July', 'August', 'September']
@@ -99,6 +176,30 @@ function getMonthName(dateStr) {
   const names = ['January','February','March','April','May','June','July','August','September','October','November','December']
   const d = new Date(dateStr)
   return names[d.getMonth()]
+}
+
+function stageLabelForPrediction(p) {
+  if (!p || !p.date) return null
+  const month = getMonthName(p.date)
+
+  // Explicit month-to-stage mapping so months are not shared
+  const monthToStageKey = {
+    November: 'juvenile',
+    December: 'juvenile',
+    January: 'juvenile',
+    February: 'juvenile',
+    May: 'breeding',
+    April: 'breeding',
+    June: 'adult',
+    July: 'adult',
+    August: 'adult',
+    September: 'adult',
+  }
+
+  const stageKey = monthToStageKey[month]
+  if (!stageKey || !STAGE_CONFIG[stageKey]) return null
+
+  return STAGE_CONFIG[stageKey].label
 }
 
 export default function MigrationPatterns() {
@@ -147,20 +248,25 @@ export default function MigrationPatterns() {
   }, [])
 
   const orderedPredictions = useMemo(() => {
-    const filtered = predictions.filter((p) => isMarine(p.lat, p.lng))
+    const filtered = predictions.filter((p) => isMarine(p.lat + latOffset, p.lng + lngOffset))
     return filtered
-      .map((p) => ({ ...p, _d: parseDate(p.date) }))
+      .map((p) => {
+        const _d = parseDate(p.date)
+        const _stageLabel = stageLabelForPrediction(p)
+        return _stageLabel ? { ...p, _d, _stageLabel } : null
+      })
+      .filter(Boolean)
       .sort((a, b) => {
         if (!a._d && !b._d) return 0
         if (!a._d) return 1
         if (!b._d) return -1
         return a._d - b._d
       })
-  }, [predictions, isMarine])
+  }, [predictions, isMarine, latOffset, lngOffset])
 
   const path = useMemo(
     () => {
-      const points = orderedPredictions.map((p) => [p.lat, p.lng])
+      const points = orderedPredictions.map((p) => [p.lat + latOffset, p.lng + lngOffset])
       // Only include segment if both endpoints are marine and the line stays marine
       const filtered = []
       for (let i = 0; i < points.length - 1; i += 1) {
@@ -173,7 +279,7 @@ export default function MigrationPatterns() {
       }
       return filtered
     },
-    [orderedPredictions, isMarine],
+    [orderedPredictions, isMarine, latOffset, lngOffset],
   )
 
   const pathDistanceKm = useMemo(() => {
@@ -228,6 +334,29 @@ export default function MigrationPatterns() {
     })
   }, [selectedStage, stageMonth, predictions, isMarine, latOffset, lngOffset])
 
+  const stagePath = useMemo(() => {
+    if (!selectedStage || !stagePredictions.length) return []
+    const ordered = [...stagePredictions].sort((a, b) => {
+      const ad = parseDate(a.date)
+      const bd = parseDate(b.date)
+      if (!ad && !bd) return 0
+      if (!ad) return 1
+      if (!bd) return -1
+      return ad - bd
+    })
+    const points = ordered.map((p) => [p.lat + latOffset, p.lng + lngOffset])
+    const filtered = []
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const [sLat, sLng] = points[i]
+      const [eLat, eLng] = points[i + 1]
+      if (isMarine(sLat, sLng) && isMarine(eLat, eLng) && isSegmentMarine(isMarine, sLat, sLng, eLat, eLng, 16)) {
+        filtered.push([sLat, sLng])
+        if (i === points.length - 2) filtered.push([eLat, eLng])
+      }
+    }
+    return filtered
+  }, [selectedStage, stagePredictions, isMarine, latOffset, lngOffset])
+
   const stageHotspots = useMemo(() => dataset?.hotspots ?? [], [dataset])
 
   const stageStats = useMemo(() => {
@@ -236,6 +365,17 @@ export default function MigrationPatterns() {
     const cpue = computeCpue(totalCatch, totalEffort).toFixed(2)
     return { totalCatch: Math.round(totalCatch), cpue, records: stageCatch.length, hotspots: stageHotspots.length }
   }, [stageCatch, stageHotspots])
+
+  const overallStageCounts = useMemo(() => {
+    const counts = { juvenile: 0, breeding: 0, adult: 0 }
+    orderedPredictions.forEach((p) => {
+      if (!p._stageLabel) return
+      if (p._stageLabel === STAGE_CONFIG.juvenile.label) counts.juvenile += 1
+      else if (p._stageLabel === STAGE_CONFIG.breeding.label) counts.breeding += 1
+      else if (p._stageLabel === STAGE_CONFIG.adult.label) counts.adult += 1
+    })
+    return counts
+  }, [orderedPredictions])
 
   const migrationFormulaContext = useMemo(() => {
     if (searchParams.get('formula') !== 'migration') return null
@@ -269,15 +409,112 @@ export default function MigrationPatterns() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Migration Path Map</h2>
             <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
               <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               </svg>
-              <span className="text-sm font-medium text-blue-900">{path.length} points</span>
+              <span className="text-sm font-medium text-blue-900">
+                {!selectedStage ? `${path.length} points (overall)` : `${stageCatch.length} catch · ${stagePredictions.length} predictions`}
+              </span>
             </div>
           </div>
+
+          {/* Stage filter controls */}
+          <div className="mb-3 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+              <span className="font-semibold text-slate-700 mr-1">View pattern for:</span>
+              <button
+                type="button"
+                onClick={() => { setSelectedStage(null); setStageMonth('All') }}
+                className={`rounded-full px-3 py-1.5 font-semibold border transition-colors ${
+                  !selectedStage
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                Overall migration
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedStage('juvenile'); setStageMonth('All') }}
+                className={`rounded-full px-3 py-1.5 font-semibold border transition-colors flex items-center gap-1 ${
+                  selectedStage === 'juvenile'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>J</span>
+                <span>Juvenile</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedStage('breeding'); setStageMonth('All') }}
+                className={`rounded-full px-3 py-1.5 font-semibold border transition-colors flex items-center gap-1 ${
+                  selectedStage === 'breeding'
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>B</span>
+                <span>Breeding</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedStage('adult'); setStageMonth('All') }}
+                className={`rounded-full px-3 py-1.5 font-semibold border transition-colors flex items-center gap-1 ${
+                  selectedStage === 'adult'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>A</span>
+                <span>Adult</span>
+              </button>
+            </div>
+
+            {/* Overall stage composition indicators */}
+            {!selectedStage && (
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+                <span className="font-semibold text-slate-700">Overall includes:</span>
+                <div className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span>Juvenile ({overallStageCounts.juvenile})</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                  <span>Breeding ({overallStageCounts.breeding})</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                  <span>Adult ({overallStageCounts.adult})</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Stage stats summary when filtered */}
+          {selectedStage && (
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 text-[11px] sm:text-xs">
+              <div className="rounded-lg border border-slate-200 px-3 py-2">
+                <p className="font-semibold text-slate-500">Total Catch</p>
+                <p className="text-sm font-bold text-slate-900">{stageStats.totalCatch} kg</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 px-3 py-2">
+                <p className="font-semibold text-slate-500">Mean CPUE</p>
+                <p className="text-sm font-bold text-slate-900">{stageStats.cpue}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 px-3 py-2">
+                <p className="font-semibold text-slate-500">Catch Records</p>
+                <p className="text-sm font-bold text-slate-900">{stageStats.records}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 px-3 py-2">
+                <p className="font-semibold text-slate-500">Hotspots</p>
+                <p className="text-sm font-bold text-slate-900">{stageStats.hotspots}</p>
+              </div>
+            </div>
+          )}
 
           <div className="h-[400px] w-full overflow-hidden rounded-lg border border-slate-200 bg-white md:h-[520px]">
             <MapContainer
@@ -295,21 +532,98 @@ export default function MigrationPatterns() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {path.length >= 2 && <Polyline positions={path} pathOptions={{ color: '#1d4ed8', weight: 4 }} />}
+              {/* Overall migration view */}
+              {!selectedStage && path.length >= 2 && (
+                <>
+                  <Polyline positions={path} pathOptions={{ color: '#1d4ed8', weight: 3, opacity: 0.5 }} />
+                  <AnimatedMigrationFlow path={path} />
+                </>
+              )}
 
-              {orderedPredictions.map((p, idx) => (
-                <CircleMarker
-                  key={p.id}
-                  center={[p.lat, p.lng]}
-                  radius={idx === 0 ? 8 : 6}
-                  pathOptions={{
-                    color: '#0f172a',
-                    weight: 1,
-                    fillColor: idx === 0 ? '#16a34a' : '#2563eb',
-                    fillOpacity: 0.85,
-                  }}
-                />
-              ))}
+              {!selectedStage &&
+                orderedPredictions.map((p, idx) => (
+                  <CircleMarker
+                    key={p.id}
+                    center={[p.lat + latOffset, p.lng + lngOffset]}
+                    radius={idx === 0 ? 8 : 6}
+                    pathOptions={{
+                      color: '#0f172a',
+                      weight: 1,
+                      fillColor: idx === 0 ? '#16a34a' : '#2563eb',
+                      fillOpacity: 0.85,
+                    }}
+                  >
+                    <Tooltip direction="top">
+                      <div className="space-y-0.5">
+                        <div className="font-semibold text-xs">Migration point</div>
+                        <div className="text-[11px]">Stage: {p._stageLabel}</div>
+                        {p.date && <div className="text-[11px] text-slate-600">Date: {p.date}</div>}
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                ))}
+
+              {/* Life-stage-specific circulation view */}
+              {selectedStage && (
+                <>
+                  {/* Stage-specific migration flow */}
+                  {stagePath.length >= 2 && (
+                    <>
+                      <Polyline positions={stagePath} pathOptions={{ color: '#0f766e', weight: 3, opacity: 0.6 }} />
+                      <AnimatedMigrationFlow path={stagePath} />
+                    </>
+                  )}
+
+                  {/* Hotspots */}
+                  {stageHotspots.map(
+                    (h) =>
+                      isMarine(h.center_lat + latOffset, h.center_lng + lngOffset) && (
+                        <Circle
+                          key={h.id}
+                          center={[h.center_lat + latOffset, h.center_lng + lngOffset]}
+                          radius={(h.radius_km || 5) * 1000}
+                          pathOptions={{ color: '#06b6d4', weight: 1, fillColor: '#06b6d4', fillOpacity: 0.18 }}
+                        />
+                      ),
+                  )}
+
+                  {/* Catch points */}
+                  {stageCatch.map((r) => (
+                    <CircleMarker
+                      key={r.id}
+                      center={[r.lat + latOffset, r.lng + lngOffset]}
+                      radius={6}
+                      pathOptions={{ color: '#f59e0b', weight: 2, fillColor: '#f59e0b', fillOpacity: 0.75 }}
+                    />
+                  ))}
+
+                  {/* Predictions */}
+                  {stagePredictions.map((p) => (
+                    <CircleMarker
+                      key={p.id}
+                      center={[p.lat + latOffset, p.lng + lngOffset]}
+                      radius={7}
+                      pathOptions={{
+                        color: '#7c3aed',
+                        weight: 2,
+                        fillColor: '#a78bfa',
+                        fillOpacity: 0.35,
+                        dashArray: '4 4',
+                      }}
+                    >
+                      <Tooltip direction="top">
+                        <div className="space-y-0.5">
+                          <div className="font-semibold text-xs">Prediction point</div>
+                          <div className="text-[11px]">
+                            Stage: {STAGE_CONFIG[selectedStage]?.label || 'Selected stage'}
+                          </div>
+                          {p.date && <div className="text-[11px] text-slate-600">Date: {p.date}</div>}
+                        </div>
+                      </Tooltip>
+                    </CircleMarker>
+                  ))}
+                </>
+              )}
             </MapContainer>
           </div>
         </div>
@@ -423,13 +737,6 @@ export default function MigrationPatterns() {
                 and predator avoidance rather than reproductive cues.</p>
               </div>
             </div>
-            <button
-              onClick={() => { setSelectedStage(selectedStage === 'juvenile' ? null : 'juvenile'); setStageMonth('All') }}
-              className={`mt-4 w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2 ${selectedStage === 'juvenile' ? 'bg-emerald-700' : 'bg-emerald-500 hover:bg-emerald-600'}`}
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-              {selectedStage === 'juvenile' ? 'Hide Map' : 'View on Map'}
-            </button>
           </div>
 
           {/* Breeding Season */}
@@ -468,13 +775,6 @@ export default function MigrationPatterns() {
                 to calmer offshore zones away from heavy fishing pressure.</p>
               </div>
             </div>
-            <button
-              onClick={() => { setSelectedStage(selectedStage === 'breeding' ? null : 'breeding'); setStageMonth('All') }}
-              className={`mt-4 w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2 ${selectedStage === 'breeding' ? 'bg-amber-700' : 'bg-amber-500 hover:bg-amber-600'}`}
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-              {selectedStage === 'breeding' ? 'Hide Map' : 'View on Map'}
-            </button>
           </div>
 
           {/* Adult Stage */}
@@ -518,126 +818,9 @@ export default function MigrationPatterns() {
                 in Bulan Sea during June–August.</p>
               </div>
             </div>
-            <button
-              onClick={() => { setSelectedStage(selectedStage === 'adult' ? null : 'adult'); setStageMonth('All') }}
-              className={`mt-4 w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2 ${selectedStage === 'adult' ? 'bg-blue-800' : 'bg-blue-600 hover:bg-blue-700'}`}
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-              {selectedStage === 'adult' ? 'Hide Map' : 'View on Map'}
-            </button>
           </div>
 
         </div>
-
-        {/* Inline Stage Distribution Map */}
-        {selectedStage && (() => {
-          const cfg = STAGE_CONFIG[selectedStage]
-          const borderColor = { emerald: 'border-emerald-300', amber: 'border-amber-300', blue: 'border-blue-300' }[cfg.color]
-          const headerBg = { emerald: 'bg-emerald-500', amber: 'bg-amber-500', blue: 'bg-blue-600' }[cfg.color]
-          const monthOptions = ['All', ...cfg.months]
-          return (
-            <div className={`mt-6 rounded-xl border-2 ${borderColor} bg-white overflow-hidden`}>
-              {/* Header */}
-              <div className={`${headerBg} px-5 py-3 flex items-center justify-between`}>
-                <div className="flex items-center gap-2 text-white">
-                  <span className="text-lg">{cfg.emoji}</span>
-                  <span className="font-bold text-sm">{cfg.label} — Distribution Map</span>
-                  <span className="text-xs opacity-80">· {cfg.year} · {cfg.season}</span>
-                </div>
-                <button onClick={() => setSelectedStage(null)} className="text-white/80 hover:text-white">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-
-              {/* Stats bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-semibold text-slate-500">Total Catch</p>
-                  <p className="text-lg font-bold text-slate-900">{stageStats.totalCatch} kg</p>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-semibold text-slate-500">Mean CPUE</p>
-                  <p className="text-lg font-bold text-slate-900">{stageStats.cpue}</p>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-semibold text-slate-500">Catch Records</p>
-                  <p className="text-lg font-bold text-slate-900">{stageStats.records}</p>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-semibold text-slate-500">Hotspots</p>
-                  <p className="text-lg font-bold text-slate-900">{stageStats.hotspots}</p>
-                </div>
-              </div>
-
-              {/* Month filter row — horizontal on mobile */}
-              <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-3">
-                <label className="text-[11px] font-semibold text-slate-700 shrink-0">Month:</label>
-                <select
-                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                  value={stageMonth}
-                  onChange={(e) => setStageMonth(e.target.value)}
-                >
-                  {monthOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <div className="flex items-center gap-3 ml-auto text-[11px] text-slate-600">
-                  <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-full inline-block bg-amber-500 shrink-0" />Catch</div>
-                  <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm inline-block bg-cyan-400 opacity-60 shrink-0" />Hotspot</div>
-                  <div className="flex items-center gap-1"><span className="h-3 w-3 rounded-full inline-block border border-purple-500 bg-purple-300 opacity-60 shrink-0" />Prediction</div>
-                </div>
-              </div>
-
-              {/* Map — full width, explicit height */}
-              <div className="w-full h-[360px] sm:h-[420px]">
-                  <MapContainer
-                    key={selectedStage}
-                    center={bulanSeaCenter}
-                    zoom={defaultZoom}
-                    minZoom={defaultZoom}
-                    maxZoom={18}
-                    maxBounds={bulanSeaBounds}
-                    maxBoundsViscosity={1.0}
-                    scrollWheelZoom
-                    style={{ height: '100%', width: '100%' }}
-                  >
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-
-                    {/* Hotspots */}
-                    {stageHotspots.map((h) => isMarine(h.center_lat + latOffset, h.center_lng + lngOffset) && (
-                      <Circle
-                        key={h.id}
-                        center={[h.center_lat + latOffset, h.center_lng + lngOffset]}
-                        radius={(h.radius_km || 5) * 1000}
-                        pathOptions={{ color: '#06b6d4', weight: 1, fillColor: '#06b6d4', fillOpacity: 0.18 }}
-                      />
-                    ))}
-
-                    {/* Catch points */}
-                    {stageCatch.map((r) => (
-                      <CircleMarker
-                        key={r.id}
-                        center={[r.lat + latOffset, r.lng + lngOffset]}
-                        radius={6}
-                        pathOptions={{ color: '#f59e0b', weight: 2, fillColor: '#f59e0b', fillOpacity: 0.75 }}
-                      />
-                    ))}
-
-                    {/* Predictions */}
-                    {stagePredictions.map((p) => (
-                      <CircleMarker
-                        key={p.id}
-                        center={[p.lat + latOffset, p.lng + lngOffset]}
-                        radius={7}
-                        pathOptions={{ color: '#7c3aed', weight: 2, fillColor: '#a78bfa', fillOpacity: 0.35, dashArray: '4 4' }}
-                      />
-                    ))}
-                  </MapContainer>
-              </div>
-            </div>
-          )
-        })()}
 
         {/* Comparative summary table */}
         <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200">
